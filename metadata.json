@@ -1,0 +1,6 @@
+{
+  "name": "Groom, Read & Beyond - BizVenture 2026",
+  "description": "Where grooming meets wisdom. Student-run physical stall and smart book pre-order catalog for BizVenture 2026 at International Standard University.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
