@@ -184,16 +184,16 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     stallLocation: 'International Standard University (ISU) Campus Stall Court',
     stallNumber: 'Stall #09',
     date: 'September 30, 2026',
-    openingHours: 'Festival Day: 9:00 AM – 6:00 PM',
+    openingHours: 'Festival Day: 10:00 AM – 6:00 PM',
     offeringsTitle: 'Festive Store Offerings',
     offering1: '📚 Curated Books & Smart Pre-Orders',
     offering2: '💍 Handmade Bangles (Churi) at Stall',
     offering3: '🎂 Fresh Homemade Treats & Celebrations',
     linksTitle: 'Navigation & Stall Desk',
     contactTitle: 'Stall Team Contacts & Pre-Orders',
-    contactPhone: '+880 1712-345678',
-    contactWhatsApp: '+880 1712-345678',
-    contactEmail: 'groomreadbeyond@gmail.com',
+    contactPhone: '+880 1617870432',
+    contactWhatsApp: '+880 1617870432',
+    contactEmail: 'jnnancy345@gmail.com',
     badge1: '🚪 Anywhere Door to Knowledge',
     badge2: '🔔 100% Student Powered',
     badge3: '✨ Good Vibes Only ♡',
@@ -265,8 +265,8 @@ export function getStoredSiteContent(): SiteContent {
 
 export function saveSiteContent(content: SiteContent): void {
   // Always synchronize phone numbers between store and footer so they never diverge
-  const unifiedPhone = (content.footer?.contactPhone || content.store?.stallContactPhone || '+880 1712-345678').trim();
-  const unifiedWhatsApp = (content.footer?.contactWhatsApp || content.store?.stallWhatsApp || '+880 1712-345678').trim();
+  const unifiedPhone = (content.footer?.contactPhone || content.store?.stallContactPhone || '+880 1617870432').trim();
+  const unifiedWhatsApp = (content.footer?.contactWhatsApp || content.store?.stallWhatsApp || '+880 1617870432').trim();
 
   const synchronizedContent: SiteContent = {
     ...content,
