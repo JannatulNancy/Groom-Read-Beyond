@@ -14,7 +14,7 @@ export const STORE_CONFIG = {
   stallNumber: "Stall #09 (Main Campus Courtyard)",
   
   // Official Banner Image
-  bannerImage: "/src/assets/images/groom_read_beyond_banner_1790616666530.jpg",
+  bannerImage: "src/assets/images/Main Pic.png",
 
   // Currency and locale
   currencySymbol: "৳",
@@ -31,7 +31,7 @@ export const STORE_CONFIG = {
   bannerBottomQuote: "Handmade Accessories • Delicious Food • Quality Books | Visit us today! - Fun Friendly. For Everyone",
 
   // Contact info for the stall team
-  stallContactPhone: "+880 1712-345678",
-  stallWhatsApp: "+880 1712-345678",
+  stallContactPhone: "+880 1617870432",
+  stallWhatsApp: "+880 1617870432",
 };
 

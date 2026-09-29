@@ -20,7 +20,7 @@ export const QRSection: React.FC<QRSectionProps> = ({ onBrowseBooks }) => {
   }, []);
 
   // Fallback demo URL if window is not ready
-  const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://bizventure2026.isu.edu/groom-read-beyond';
+  const currentUrl = typeof window !== 'undefined' ? window.location.href : 'https://groom-read-beyond-bizventure-2026.ai.studio/';
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(currentUrl);
