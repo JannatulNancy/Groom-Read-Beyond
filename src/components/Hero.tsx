@@ -3,6 +3,7 @@ import { STORE_CONFIG } from '../config/storeConfig';
 import { getStoredSiteContent } from '../services/db';
 import { BookOpen, Package, QrCode, Sparkles, MapPin, Calendar, Heart, ShieldAlert } from 'lucide-react';
 import { SiteContent } from '../types';
+import { normalizeImageUrl } from '../utils/imageUrl';
 
 interface HeroProps {
   onBrowseBooks: () => void;
@@ -120,9 +121,15 @@ export const Hero: React.FC<HeroProps> = ({
             <div className="relative rounded-3xl bg-white p-3 border border-slate-200 shadow-xl overflow-hidden group">
               <div className="relative rounded-2xl overflow-hidden aspect-[4/3] bg-slate-100">
                 <img
-                  src={content.heroCard?.image || content.store.bannerImage}
+                  src={normalizeImageUrl(content.heroCard?.image || content.store.bannerImage, '/images/Main_Pic.png')}
                   alt={`${content.store.storeName} Stall Banner`}
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    if (!target.src.endsWith('/images/Main_Pic.png')) {
+                      target.src = '/images/Main_Pic.png';
+                    }
+                  }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 

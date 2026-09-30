@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Book } from '../types';
 import { STORE_CONFIG } from '../config/storeConfig';
 import { X, CheckCircle2, Clock, MapPin, BookOpen } from 'lucide-react';
+import { normalizeImageUrl } from '../utils/imageUrl';
 
 interface BookDetailsModalProps {
   book: Book | null;
@@ -17,6 +18,8 @@ export const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
   if (!book) return null;
 
   const isAvailable = book.status === 'available';
+  const [imageError, setImageError] = useState(false);
+  const normalizedCover = normalizeImageUrl(book.coverImage);
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-150">
@@ -44,15 +47,16 @@ export const BookDetailsModal: React.FC<BookDetailsModalProps> = ({
               <div className="absolute left-0 top-0 bottom-0 w-3.5 bg-black/25 border-r border-white/10 z-10" />
 
               {/* Custom Cover Image */}
-              {book.coverImage && (
+              {normalizedCover && !imageError && (
                 <div className="absolute inset-0 z-0">
                   <img
-                    src={book.coverImage}
+                    src={normalizedCover}
                     alt={book.title}
                     referrerPolicy="no-referrer"
+                    onError={() => setImageError(true)}
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
                 </div>
               )}
 

@@ -18,6 +18,7 @@ import {
 } from '../services/db';
 import { saveNewPreOrder } from '../services/orderStorage';
 import { compressImageFile } from '../utils/imageCompressor';
+import { normalizeImageUrl } from '../utils/imageUrl';
 import {
   LayoutDashboard,
   BookOpen,
@@ -52,14 +53,17 @@ import {
   TrendingDown,
   Users,
   AlertCircle,
-  X
+  X,
+  LogOut,
+  ShieldCheck
 } from 'lucide-react';
 
 interface AdminPanelProps {
   onSwitchToStore: () => void;
+  onLogout?: () => void;
 }
 
-export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
+export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogout }) => {
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<'analytics' | 'books' | 'profit' | 'orders' | 'content' | 'settings'>('analytics');
 
@@ -318,16 +322,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
   };
 
   const PRESET_IMAGES = [
-    { label: 'Official Store Banner', url: '/src/assets/images/groom_read_beyond_banner_1790616666530.jpg' },
-    { label: 'Campus Stall Booth', url: '/src/assets/images/hero_bizventure_stall_1790615311084.jpg' },
-    { label: 'Artisan Bangles', url: '/src/assets/images/stall_bangles_1790615330269.jpg' },
-    { label: 'Fresh Cakes & Treats', url: '/src/assets/images/stall_cakes_1790615343160.jpg' },
+    { label: 'Official Store Banner', url: '/images/groom_read_beyond_banner_1790616666530.jpg' },
+    { label: 'Main Stall Poster', url: '/images/Main_Pic.png' },
+    { label: 'Campus Stall Booth', url: '/images/hero_bizventure_stall_1790615311084.jpg' },
+    { label: 'Artisan Bangles', url: '/images/Bangles.png' },
+    { label: 'Fresh Cakes & Treats', url: '/images/Cakes.png' },
   ];
 
   const updateLiveContent = (updater: (prev: SiteContent) => SiteContent) => {
     setContent((prev) => {
       const next = updater(prev);
-      saveSiteContent(next);
+      setTimeout(() => {
+        saveSiteContent(next);
+      }, 0);
       return next;
     });
   };
@@ -341,6 +348,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
       try {
         showToast('Optimizing & compressing photo for live storefront...');
         const result = await compressImageFile(file, 1280, 960, 0.8);
+
+        // Upload to server disk so image is permanent and visible on all devices/published site
+        try {
+          const uploadRes = await fetch('/api/upload-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              dataUrl: result.dataUrl,
+              filename: file.name.replace(/\.[^/.]+$/, ''),
+            }),
+          });
+          if (uploadRes.ok) {
+            const uploadJson = await uploadRes.json();
+            if (uploadJson.success && uploadJson.url) {
+              onComplete(uploadJson.url);
+              showToast(`Image uploaded & saved as public server file (${uploadJson.sizeKb} KB)! Saved live.`);
+              return;
+            }
+          }
+        } catch {
+          // Fall back to compressed base64 data URI if server upload is unreachable
+        }
+
         onComplete(result.dataUrl);
         showToast(`Image uploaded & optimized (${result.compressedSizeKb} KB)! Saved live.`);
       } catch (err) {
@@ -789,11 +819,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
             </div>
           </div>
 
-          {/* Actions: Export CSV + switch back to customer store */}
+          {/* Actions: Export CSV + switch back to customer store + Logout */}
           <div className="flex items-center gap-2">
+            <span className="hidden xl:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800/90 text-sky-300 text-xs font-medium border border-slate-700">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Admin: jnnancy345@gmail.com</span>
+            </span>
+
             <button
               onClick={handleExportCSV}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-xs transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 rounded-xl shadow-xs transition-colors cursor-pointer"
               title="Export order history stored in localStorage to CSV file"
             >
               <Download className="w-3.5 h-3.5" />
@@ -803,11 +838,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
 
             <button
               onClick={onSwitchToStore}
-              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-900 bg-white hover:bg-slate-100 rounded-xl shadow-xs transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-900 bg-white hover:bg-slate-100 rounded-xl shadow-xs transition-colors cursor-pointer"
+              title="Return to customer storefront"
             >
               <Eye className="w-4 h-4 text-sky-600" />
-              <span>Customer Storefront</span>
+              <span className="hidden sm:inline">Customer Storefront</span>
+              <span className="sm:hidden">Store</span>
             </button>
+
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-rose-300 hover:text-white bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 rounded-xl transition-colors cursor-pointer"
+                title="Log out of Admin Panel"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            )}
           </div>
 
         </div>
@@ -1150,7 +1198,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
                               <div className="w-10 h-14 rounded bg-slate-100 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center">
                                 {book.coverImage ? (
                                   <img
-                                    src={book.coverImage}
+                                    src={normalizeImageUrl(book.coverImage)}
                                     alt={book.title}
                                     referrerPolicy="no-referrer"
                                     className="w-full h-full object-cover"
@@ -1509,7 +1557,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
                               <div className="w-10 h-14 rounded bg-slate-100 overflow-hidden shrink-0 border border-slate-200 flex items-center justify-center">
                                 {book.coverImage ? (
                                   <img
-                                    src={book.coverImage}
+                                    src={normalizeImageUrl(book.coverImage)}
                                     alt={book.title}
                                     referrerPolicy="no-referrer"
                                     className="w-full h-full object-cover"
@@ -2778,7 +2826,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
                               ...content,
                               stallProducts: {
                                 ...content.stallProducts,
-                                bangles: { ...content.stallProducts.bangles, image: '/src/assets/images/stall_bangles_1790615330269.jpg' }
+                                bangles: { ...content.stallProducts.bangles, image: '/images/Bangles.png' }
                               }
                             })}
                             className="text-[10px] text-slate-500 hover:underline cursor-pointer"
@@ -2961,7 +3009,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
                               ...content,
                               stallProducts: {
                                 ...content.stallProducts,
-                                cakes: { ...content.stallProducts.cakes, image: '/src/assets/images/stall_cakes_1790615343160.jpg' }
+                                cakes: { ...content.stallProducts.cakes, image: '/images/Cakes.png' }
                               }
                             })}
                             className="text-[10px] text-slate-500 hover:underline cursor-pointer"
@@ -3425,7 +3473,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
                 <div className="flex items-center gap-3">
                   <div className="w-24 h-16 rounded-xl overflow-hidden bg-slate-200 border border-slate-300 shrink-0">
                     <img
-                      src={content.about.teamPhoto || '/src/assets/images/hero_bizventure_stall_1790615311084.jpg'}
+                      src={normalizeImageUrl(content.about.teamPhoto) || '/images/hero_bizventure_stall_1790615311084.jpg'}
                       alt="Team preview"
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
@@ -4110,7 +4158,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
 
                         <button
                           type="button"
-                          onClick={() => setContent({ ...content, store: { ...content.store, bannerImage: '/src/assets/images/groom_read_beyond_banner_1790616666530.jpg' } })}
+                          onClick={() => setContent({ ...content, store: { ...content.store, bannerImage: '/images/groom_read_beyond_banner_1790616666530.jpg' } })}
                           className="text-[10px] text-slate-500 hover:underline cursor-pointer"
                         >
                           Reset Default Banner
@@ -4377,7 +4425,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore }) => {
                   <div className="w-12 h-16 rounded bg-slate-200 overflow-hidden shrink-0 border flex items-center justify-center">
                     {editingBook.coverImage ? (
                       <img
-                        src={editingBook.coverImage}
+                        src={normalizeImageUrl(editingBook.coverImage)}
                         alt="Preview"
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"

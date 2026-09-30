@@ -1,20 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { STORE_CONFIG } from '../config/storeConfig';
 import { getStoredOrders, getStoredSiteContent } from '../services/db';
-import { Menu, X, BookOpen, ClipboardList, Settings, Sparkles } from 'lucide-react';
+import { Menu, X, BookOpen, ClipboardList, Phone, Sparkles } from 'lucide-react';
 import { SiteContent } from '../types';
 
 interface NavbarProps {
   onOpenOrders: () => void;
   onBrowseBooks: () => void;
-  onOpenAdmin: () => void;
   activeSection: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onOpenOrders,
   onBrowseBooks,
-  onOpenAdmin,
   activeSection
 }) => {
   const [orderCount, setOrderCount] = useState(0);
@@ -102,18 +100,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           ))}
         </nav>
 
-        {/* Zone 3: Primary Actions + Admin Panel switch */}
+        {/* Zone 3: Primary Actions (Phone Hotline + Orders + Browse) */}
         <div className="flex items-center gap-2">
           
-          {/* Admin Panel Trigger */}
-          <button
-            onClick={onOpenAdmin}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 rounded-lg transition-colors cursor-pointer"
-            title="Open Admin Page to edit books, landing page sections, and view order database"
-          >
-            <Settings className="w-3.5 h-3.5 text-sky-600" />
-            <span className="hidden sm:inline">Admin Panel</span>
-          </button>
+          {/* Quick Stall Phone Hotline */}
+          {(content.footer?.contactPhone || content.store.stallContactPhone) && (
+            <a
+              href={`tel:${(content.footer?.contactPhone || content.store.stallContactPhone).replace(/[^0-9+]/g, '')}`}
+              className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 rounded-lg transition-colors cursor-pointer"
+              title="Call Stall #09 Hotline"
+            >
+              <Phone className="w-3.5 h-3.5 text-sky-600" />
+              <span className="font-mono text-[11px]">{content.footer?.contactPhone || content.store.stallContactPhone}</span>
+            </a>
+          )}
 
           {/* Orders Drawer Trigger */}
           <button
@@ -164,16 +164,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             </a>
           ))}
           <div className="pt-2 border-t border-slate-100 flex flex-col gap-2">
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                onOpenAdmin();
-              }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-lg cursor-pointer"
-            >
-              <Settings className="w-4 h-4 text-sky-600" />
-              <span>Go to Admin Panel (Edit Books & Content)</span>
-            </button>
+            {(content.footer?.contactPhone || content.store.stallContactPhone) && (
+              <a
+                href={`tel:${(content.footer?.contactPhone || content.store.stallContactPhone).replace(/[^0-9+]/g, '')}`}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-semibold text-sky-800 bg-sky-50 border border-sky-200 rounded-lg"
+              >
+                <Phone className="w-4 h-4 text-sky-600" />
+                <span>Call Stall Hotline: {content.footer?.contactPhone || content.store.stallContactPhone}</span>
+              </a>
+            )}
             <button
               onClick={() => {
                 setMobileMenuOpen(false);

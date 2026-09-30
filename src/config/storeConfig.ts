@@ -14,7 +14,7 @@ export const STORE_CONFIG = {
   stallNumber: "Stall #09 (Main Campus Courtyard)",
   
   // Official Banner Image
-  bannerImage: "src/assets/images/Main Pic.png",
+  bannerImage: "/images/Main_Pic.png",
 
   // Currency and locale
   currencySymbol: "৳",

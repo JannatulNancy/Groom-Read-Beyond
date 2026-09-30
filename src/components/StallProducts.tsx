@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getStoredSiteContent } from '../services/db';
 import { MapPin, Store, CheckCircle2 } from 'lucide-react';
 import { SiteContent } from '../types';
+import { normalizeImageUrl } from '../utils/imageUrl';
 
 export const StallProducts: React.FC = () => {
   const [content, setContent] = useState<SiteContent>(getStoredSiteContent());
@@ -41,9 +42,12 @@ export const StallProducts: React.FC = () => {
             <div>
               <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
                 <img
-                  src={bangles.image}
+                  src={normalizeImageUrl(bangles.image, '/images/Bangles.png')}
                   alt={bangles.name}
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/images/Bangles.png';
+                  }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
 
@@ -100,9 +104,12 @@ export const StallProducts: React.FC = () => {
             <div>
               <div className="relative aspect-[4/3] bg-slate-100 overflow-hidden">
                 <img
-                  src={cakes.image}
+                  src={normalizeImageUrl(cakes.image, '/images/Cakes.png')}
                   alt={cakes.name}
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/images/Cakes.png';
+                  }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
 

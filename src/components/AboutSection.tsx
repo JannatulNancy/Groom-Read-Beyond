@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getStoredSiteContent } from '../services/db';
 import { Lightbulb, Users, Compass, Sparkles } from 'lucide-react';
 import { SiteContent } from '../types';
+import { normalizeImageUrl } from '../utils/imageUrl';
 
 export const AboutSection: React.FC = () => {
   const [content, setContent] = useState<SiteContent>(getStoredSiteContent());
@@ -39,9 +40,12 @@ export const AboutSection: React.FC = () => {
             {ab.teamPhoto && (
               <div className="max-w-xl mx-auto rounded-2xl overflow-hidden aspect-[16/9] shadow-md border border-slate-200 mt-4">
                 <img
-                  src={ab.teamPhoto}
+                  src={normalizeImageUrl(ab.teamPhoto, '/images/hero_bizventure_stall_1790615311084.jpg')}
                   alt={ab.title}
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/images/hero_bizventure_stall_1790615311084.jpg';
+                  }}
                   className="w-full h-full object-cover"
                 />
               </div>

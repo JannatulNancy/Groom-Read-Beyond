@@ -49,7 +49,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     stat3Label: 'Unsold Inventory Waste',
   },
   heroCard: {
-    image: STORE_CONFIG.bannerImage,
+    image: STORE_CONFIG.bannerImage || '/images/Main_Pic.png',
     topTag: `Stall #09 Live • ${STORE_CONFIG.institution}`,
     badgePrimary: 'Hybrid Retail',
     badgeSecondary: 'Physical + Digital',
@@ -72,12 +72,15 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     booksHeading: 'BOOKS & READING',
     booksSub: 'Browse online & pre-order',
     booksDesc: 'Explore our wider book collection and pre-order books that are not currently displayed at the stall. Stories, curated books, and learning for all ages.',
+    booksImage: '/images/White.jpg',
     banglesHeading: 'HANDMADE BANGLES (CHURI)',
     banglesSub: 'Available at our stall',
     banglesDesc: 'Colorful, artisan, traditional handmade bangles. Explore our vibrant festive collection directly at the physical stall.',
+    banglesImage: '/images/Bangles.png',
     cakesHeading: 'FOODS & TREATS',
     cakesSub: 'Fresh & available at our stall',
     cakesDesc: 'Homemade snacks, sweet & savory treats. Fresh celebration cupcakes, brownies, and cookies baked for festival morning.',
+    cakesImage: '/images/Cakes.png',
   },
   stallProducts: {
     bangles: {
@@ -85,7 +88,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
       tagline: 'Colorful • Artisan • Traditional Handmade',
       priceRange: '৳120 – ৳350 / set',
       description: 'Vibrant silk-wrapped and authentic hand-crafted glass churi bangles curated for festival elegance. Available in customizable sets and seasonal university colorways.',
-      image: STALL_PRODUCTS[0]?.image || '/src/assets/images/stall_bangles_1790615330269.jpg',
+      image: STALL_PRODUCTS[0]?.image || '/images/Bangles.png',
       highlights: [
         'Handcrafted silk thread designs',
         'Exclusive festival colourways',
@@ -98,7 +101,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
       tagline: 'Homemade • Snacks • Sweet & Savory',
       priceRange: '৳80 – ৳180 / piece',
       description: 'Freshly baked celebratory cupcakes, red velvet slices, savory pastry snacks, and dark chocolate cookies prepared by student culinary creators.',
-      image: STALL_PRODUCTS[1]?.image || '/src/assets/images/stall_cakes_1790615343160.jpg',
+      image: STALL_PRODUCTS[1]?.image || '/images/Cakes.png',
       highlights: [
         'Baked fresh on 30 Sept morning',
         'Sweet cupcakes & savory festival snacks',
@@ -162,7 +165,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     value3Title: 'Smart Execution',
     value3Desc: 'Disciplined unit economics, minimal inventory holding risk, and real-time demand validation for university judges.',
     closingQuote: 'Powered by creativity, teamwork and smart business decisions.',
-    teamPhoto: '/src/assets/images/hero_bizventure_stall_1790615311084.jpg',
+    teamPhoto: '/images/hero_bizventure_stall_1790615311084.jpg',
   },
   qrSection: {
     badge: 'Scan & Order at Stall #09',
@@ -210,10 +213,24 @@ export function getStoredSiteContent(): SiteContent {
     const raw = localStorage.getItem(STORAGE_KEY_CONTENT);
     if (!raw) {
       localStorage.setItem(STORAGE_KEY_CONTENT, JSON.stringify(DEFAULT_SITE_CONTENT));
+      // Asynchronously fetch latest from server in background
+      fetch('/api/content')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.content) {
+            localStorage.setItem(STORAGE_KEY_CONTENT, JSON.stringify(data.content));
+            safeDispatchEvent('bizventure-content-updated', data.content);
+          }
+        })
+        .catch(() => {});
       return DEFAULT_SITE_CONTENT;
     }
-    // Automatically modernize any legacy Stall #07 to Stall #09
-    const normalizedRaw = raw.replace(/Stall #07/g, 'Stall #09').replace(/Stall #7/g, 'Stall #9');
+    // Automatically modernize any legacy Stall #07 to Stall #09 & resolve image paths
+    const normalizedRaw = raw
+      .replace(/Stall #07/g, 'Stall #09')
+      .replace(/Stall #7/g, 'Stall #9')
+      .replace(/\/src\/assets\/images\//g, '/images/')
+      .replace(/src\/assets\/images\//g, '/images/');
     const parsed = JSON.parse(normalizedRaw);
     return {
       ...DEFAULT_SITE_CONTENT,
@@ -258,9 +275,21 @@ export function getStoredSiteContent(): SiteContent {
       },
     };
   } catch (e) {
-    console.error('Failed reading site content', e);
+    console.error('Failed reading stored content', e);
     return DEFAULT_SITE_CONTENT;
   }
+}
+
+// Helper for asynchronously dispatching browser events so React state updates
+// never collide across component render cycles (avoids "Cannot update a component while rendering a different component")
+function safeDispatchEvent(eventName: string, detail?: unknown): void {
+  setTimeout(() => {
+    try {
+      window.dispatchEvent(new CustomEvent(eventName, { detail }));
+    } catch (e) {
+      console.warn(`Failed dispatching ${eventName}`, e);
+    }
+  }, 0);
 }
 
 export function saveSiteContent(content: SiteContent): void {
@@ -288,17 +317,28 @@ export function saveSiteContent(content: SiteContent): void {
 
   try {
     localStorage.setItem(STORAGE_KEY_CONTENT, JSON.stringify(synchronizedContent));
+    // Persist to server disk for cross-device & published site persistence
+    fetch('/api/content', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: synchronizedContent }),
+    }).catch(() => {});
   } catch (e) {
     console.warn('Storage warning: could not write full site content to localStorage, dispatching memory event anyway', e);
   } finally {
-    // ALWAYS dispatch the event so all live components immediately re-render with fresh content
-    window.dispatchEvent(new CustomEvent('bizventure-content-updated', { detail: synchronizedContent }));
+    // ALWAYS dispatch the event in next tick so React components render cleanly
+    safeDispatchEvent('bizventure-content-updated', synchronizedContent);
   }
 }
 
 export function resetSiteContent(): SiteContent {
   localStorage.setItem(STORAGE_KEY_CONTENT, JSON.stringify(DEFAULT_SITE_CONTENT));
-  window.dispatchEvent(new CustomEvent('bizventure-content-updated', { detail: DEFAULT_SITE_CONTENT }));
+  fetch('/api/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: DEFAULT_SITE_CONTENT }),
+  }).catch(() => {});
+  safeDispatchEvent('bizventure-content-updated', DEFAULT_SITE_CONTENT);
   return DEFAULT_SITE_CONTENT;
 }
 
@@ -309,18 +349,33 @@ export function getStoredBooks(): Book[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_BOOKS);
     const version = localStorage.getItem(STORAGE_KEY_BOOKS_VERSION);
-    if (!raw || version !== 'v2_stall9_official_pricing') {
+    if (!raw || version !== 'v3_stall9_real_cover_images') {
       localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(BOOKS_DATA));
-      localStorage.setItem(STORAGE_KEY_BOOKS_VERSION, 'v2_stall9_official_pricing');
+      localStorage.setItem(STORAGE_KEY_BOOKS_VERSION, 'v3_stall9_real_cover_images');
+      // Fetch from server in background
+      fetch('/api/books')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.books) && data.books.length > 0) {
+            localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(data.books));
+            safeDispatchEvent('bizventure-books-updated', data.books);
+          }
+        })
+        .catch(() => {});
       return BOOKS_DATA;
     }
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      // Ensure all books have both costPrice and updated selling price by cross-referencing BOOKS_DATA
       let updated = false;
       const enriched = parsed.map((book: Book) => {
-        const matchingDefault = BOOKS_DATA.find((d) => d.title.toLowerCase() === book.title.toLowerCase());
+        const matchingDefault = BOOKS_DATA.find(
+          (d) => d.title.toLowerCase() === book.title.toLowerCase() || d.id === book.id
+        );
         if (matchingDefault) {
+          if (!book.coverImage && matchingDefault.coverImage) {
+            book.coverImage = matchingDefault.coverImage;
+            updated = true;
+          }
           if (book.costPrice === undefined || book.costPrice === 0) {
             book.costPrice = matchingDefault.costPrice;
             updated = true;
@@ -329,6 +384,10 @@ export function getStoredBooks(): Book[] {
             book.price = matchingDefault.price;
             updated = true;
           }
+        }
+        if (book.coverImage && (book.coverImage.startsWith('/src/assets/images/') || book.coverImage.startsWith('src/assets/images/'))) {
+          book.coverImage = book.coverImage.replace(/\/src\/assets\/images\//, '/images/').replace(/src\/assets\/images\//, '/images/');
+          updated = true;
         }
         return book;
       });
@@ -358,7 +417,12 @@ export function saveBook(book: Book): Book[] {
 
   try {
     localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent('bizventure-books-updated', { detail: updated }));
+    fetch('/api/books', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ books: updated }),
+    }).catch(() => {});
+    safeDispatchEvent('bizventure-books-updated', updated);
   } catch (e) {
     console.error('Failed saving book', e);
   }
@@ -370,7 +434,12 @@ export function deleteBook(bookId: string): Book[] {
   const updated = books.filter((b) => b.id !== bookId);
   try {
     localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent('bizventure-books-updated', { detail: updated }));
+    fetch('/api/books', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ books: updated }),
+    }).catch(() => {});
+    safeDispatchEvent('bizventure-books-updated', updated);
   } catch (e) {
     console.error('Failed deleting book', e);
   }
@@ -379,8 +448,13 @@ export function deleteBook(bookId: string): Book[] {
 
 export function resetBooks(): Book[] {
   localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(BOOKS_DATA));
-  localStorage.setItem(STORAGE_KEY_BOOKS_VERSION, 'v1_stall9');
-  window.dispatchEvent(new CustomEvent('bizventure-books-updated', { detail: BOOKS_DATA }));
+  localStorage.setItem(STORAGE_KEY_BOOKS_VERSION, 'v3_stall9_real_cover_images');
+  fetch('/api/books', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ books: BOOKS_DATA }),
+  }).catch(() => {});
+  safeDispatchEvent('bizventure-books-updated', BOOKS_DATA);
   return BOOKS_DATA;
 }
 
@@ -443,6 +517,15 @@ export function getStoredOrders(): PreOrder[] {
     const raw = localStorage.getItem(STORAGE_KEY_ORDERS);
     if (!raw) {
       localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(DEFAULT_ORDERS));
+      fetch('/api/orders')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && Array.isArray(data.orders)) {
+            localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(data.orders));
+            safeDispatchEvent('bizventure-order-created', data.orders);
+          }
+        })
+        .catch(() => {});
       return DEFAULT_ORDERS;
     }
     const parsed = JSON.parse(raw);
@@ -474,7 +557,12 @@ export function updateOrderStatus(
 
   try {
     localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent('bizventure-order-created', { detail: updated }));
+    fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: updated }),
+    }).catch(() => {});
+    safeDispatchEvent('bizventure-order-created', updated);
   } catch (e) {
     console.error('Failed updating order status', e);
   }
@@ -486,7 +574,12 @@ export function deleteOrder(orderId: string): PreOrder[] {
   const updated = orders.filter((o) => o.id !== orderId);
   try {
     localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent('bizventure-order-created', { detail: updated }));
+    fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: updated }),
+    }).catch(() => {});
+    safeDispatchEvent('bizventure-order-created', updated);
 
     // Also remove from completed order history if present
     const historyRaw = localStorage.getItem('bizventure_completed_order_history');
@@ -496,7 +589,7 @@ export function deleteOrder(orderId: string): PreOrder[] {
         if (Array.isArray(historyList)) {
           const filteredHistory = historyList.filter((item: any) => item.id !== orderId);
           localStorage.setItem('bizventure_completed_order_history', JSON.stringify(filteredHistory));
-          window.dispatchEvent(new CustomEvent('bizventure-order-history-updated', { detail: filteredHistory }));
+          safeDispatchEvent('bizventure-order-history-updated', filteredHistory);
         }
       } catch {
         // ignore parse error
@@ -510,7 +603,12 @@ export function deleteOrder(orderId: string): PreOrder[] {
 
 export function resetOrders(): PreOrder[] {
   localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(DEFAULT_ORDERS));
-  window.dispatchEvent(new CustomEvent('bizventure-order-created', { detail: DEFAULT_ORDERS }));
+  fetch('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orders: DEFAULT_ORDERS }),
+  }).catch(() => {});
+  safeDispatchEvent('bizventure-order-created', DEFAULT_ORDERS);
   return DEFAULT_ORDERS;
 }
 
@@ -597,9 +695,9 @@ export function importDatabaseBackup(jsonString: string): boolean {
     if (Array.isArray(parsed.orders)) {
       localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(parsed.orders));
     }
-    window.dispatchEvent(new CustomEvent('bizventure-content-updated'));
-    window.dispatchEvent(new CustomEvent('bizventure-books-updated'));
-    window.dispatchEvent(new CustomEvent('bizventure-order-created'));
+    safeDispatchEvent('bizventure-content-updated');
+    safeDispatchEvent('bizventure-books-updated');
+    safeDispatchEvent('bizventure-order-created');
     return true;
   } catch (err) {
     console.error('Import failed', err);

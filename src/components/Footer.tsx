@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { getStoredSiteContent } from '../services/db';
-import { MapPin, Calendar, Clock, Phone, MessageSquare, Mail, Sparkles, BookOpen, Heart, ShieldCheck } from 'lucide-react';
+import { MapPin, Calendar, Clock, Phone, MessageSquare, Mail, Sparkles, BookOpen, Heart, ShieldCheck, Lock } from 'lucide-react';
 import { SiteContent } from '../types';
 
 interface FooterProps {
   onBrowseBooks: () => void;
   onOpenOrders: () => void;
-  onOpenAdmin: () => void;
+  onOpenAdmin?: () => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onBrowseBooks,
   onOpenOrders,
-  onOpenAdmin,
 }) => {
   const [content, setContent] = useState<SiteContent>(getStoredSiteContent());
 
@@ -174,12 +173,9 @@ export const Footer: React.FC<FooterProps> = ({
                 </button>
               </li>
               <li>
-                <button
-                  onClick={onOpenAdmin}
-                  className="text-rose-300 hover:text-rose-200 font-bold transition-colors cursor-pointer text-left"
-                >
-                  ⚙️ Admin Page (CMS)
-                </button>
+                <a href="#about" className="hover:text-amber-300 transition-colors">
+                  Meet Our Team
+                </a>
               </li>
             </ul>
           </div>
@@ -203,7 +199,7 @@ export const Footer: React.FC<FooterProps> = ({
 
               {footer.contactWhatsApp && (
                 <a
-                  href={`https://wa.me/${cleanWhatsApp}?text=${encodeURIComponent('Hello Groom, Read & Beyond Stall #07 Team!')}`}
+                  href={`https://wa.me/${cleanWhatsApp}?text=${encodeURIComponent('Hello Groom, Read & Beyond Stall #09 Team!')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-emerald-300 hover:text-emerald-200 transition-colors font-medium group"
@@ -243,8 +239,26 @@ export const Footer: React.FC<FooterProps> = ({
 
         {/* Bottom copyright row */}
         <div className="pt-6 border-t border-sky-800/60 flex flex-col sm:flex-row items-center justify-between text-xs text-sky-300/80 gap-3">
-          <div>
-            {footer.copyrightText}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span>{footer.copyrightText}</span>
+            <span className="text-sky-700">·</span>
+            <a
+              href="/admin"
+              onClick={(e) => {
+                e.preventDefault();
+                try {
+                  window.history.pushState({}, '', '/admin');
+                  window.dispatchEvent(new Event('popstate'));
+                } catch {
+                  window.location.hash = '#/admin';
+                }
+              }}
+              className="inline-flex items-center gap-1 text-[11px] text-sky-400/40 hover:text-sky-200 transition-colors"
+              title="Admin Portal Login (/admin)"
+            >
+              <Lock className="w-2.5 h-2.5" />
+              <span>Admin Portal</span>
+            </a>
           </div>
           <div className="italic text-center sm:text-right text-rose-300/90 font-medium">
             "{footer.bottomQuote}"

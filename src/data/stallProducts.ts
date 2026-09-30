@@ -8,7 +8,7 @@ export const STALL_PRODUCTS: StallProduct[] = [
     tagline: 'Handcrafted Festive Adornments',
     description: 'Vibrant silk-wrapped and authentic hand-cut glass bangles curated for festival elegance. Available in customizable sets and seasonal university colorways.',
     priceRange: '৳120 – ৳350 / set',
-    image: 'src/assets/images/Bangles.png',
+    image: '/images/Bangles.png',
     highlights: [
       'Handcrafted silk thread designs',
       'Exclusive festival colourways',
@@ -23,7 +23,7 @@ export const STALL_PRODUCTS: StallProduct[] = [
     tagline: 'Baked Fresh for BizVenture Morning',
     description: 'Freshly baked celebratory cupcakes, red velvet slices, and dark chocolate brownies prepared by student culinary creators. Served fresh throughout competition day.',
     priceRange: '৳80 – ৳180 / piece',
-    image: 'src/assets/images/Cakes.png',
+    image: '/images/Cakes.png',
     highlights: [
       'Baked fresh on 30 Sept morning',
       'Rich chocolate & red velvet options',
@@ -33,4 +33,4 @@ export const STALL_PRODUCTS: StallProduct[] = [
   }
 ];
 
-export const STALL_HERO_IMAGE = '/src/assets/images/hero_bizventure_stall_1790615311084.jpg';
+export const STALL_HERO_IMAGE = '/images/Main_Pic.png';

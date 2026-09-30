@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BookOpen, ArrowRight, Store, Sparkles } from 'lucide-react';
 import { getStoredSiteContent } from '../services/db';
 import { SiteContent } from '../types';
+import { normalizeImageUrl } from '../utils/imageUrl';
 
 interface StoreConceptProps {
   onExploreBooks: () => void;
@@ -44,12 +45,15 @@ export const StoreConcept: React.FC<StoreConceptProps> = ({
           {/* Card 1: Books */}
           <div className="relative rounded-2xl p-6 sm:p-7 bg-sky-50/60 border-2 border-sky-300 hover:border-sky-500 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group overflow-hidden">
             <div className="space-y-4">
-              {content.concept.booksImage && (
+              {(content.concept.booksImage || true) && (
                 <div className="rounded-xl overflow-hidden aspect-[16/9] mb-3 bg-sky-100 shadow-2xs">
                   <img
-                    src={content.concept.booksImage}
+                    src={normalizeImageUrl(content.concept.booksImage, '/images/White.jpg')}
                     alt={content.concept.booksHeading}
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/images/White.jpg';
+                    }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
@@ -91,12 +95,15 @@ export const StoreConcept: React.FC<StoreConceptProps> = ({
           {/* Card 2: Bangles */}
           <div className="relative rounded-2xl p-6 sm:p-7 bg-slate-50 border border-slate-200/90 hover:border-amber-400 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group overflow-hidden">
             <div className="space-y-4">
-              {content.concept.banglesImage && (
+              {(content.concept.banglesImage || true) && (
                 <div className="rounded-xl overflow-hidden aspect-[16/9] mb-3 bg-amber-100 shadow-2xs">
                   <img
-                    src={content.concept.banglesImage}
+                    src={normalizeImageUrl(content.concept.banglesImage, '/images/Bangles.png')}
                     alt={content.concept.banglesHeading}
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/images/Bangles.png';
+                    }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
@@ -139,12 +146,15 @@ export const StoreConcept: React.FC<StoreConceptProps> = ({
           {/* Card 3: Cakes & Treats */}
           <div className="relative rounded-2xl p-6 sm:p-7 bg-slate-50 border border-slate-200/90 hover:border-rose-400 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group overflow-hidden">
             <div className="space-y-4">
-              {content.concept.cakesImage && (
+              {(content.concept.cakesImage || true) && (
                 <div className="rounded-xl overflow-hidden aspect-[16/9] mb-3 bg-rose-100 shadow-2xs">
                   <img
-                    src={content.concept.cakesImage}
+                    src={normalizeImageUrl(content.concept.cakesImage, '/images/Cakes.png')}
                     alt={content.concept.cakesHeading}
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/images/Cakes.png';
+                    }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>

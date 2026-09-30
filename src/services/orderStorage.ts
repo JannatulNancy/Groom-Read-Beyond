@@ -84,6 +84,16 @@ export function getStoredCompletedOrders(): PreOrder[] {
   }
 }
 
+function safeDispatch(eventName: string, detail?: unknown) {
+  setTimeout(() => {
+    try {
+      window.dispatchEvent(new CustomEvent(eventName, { detail }));
+    } catch (e) {
+      console.warn(`Failed dispatching ${eventName}`, e);
+    }
+  }, 0);
+}
+
 export function saveCompletedOrder(order: PreOrder): PreOrder[] {
   try {
     const existing = getStoredCompletedOrders();
@@ -96,7 +106,7 @@ export function saveCompletedOrder(order: PreOrder): PreOrder[] {
     const filtered = existing.filter((o) => o.id !== order.id);
     const updated = [completedOrder, ...filtered];
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent('bizventure-order-history-updated', { detail: updated }));
+    safeDispatch('bizventure-order-history-updated', updated);
     return updated;
   } catch (err) {
     console.error('Failed saving completed order', err);
@@ -109,7 +119,7 @@ export function removeCompletedOrder(orderId: string): PreOrder[] {
     const existing = getStoredCompletedOrders();
     const updated = existing.filter((o) => o.id !== orderId);
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent('bizventure-order-history-updated', { detail: updated }));
+    safeDispatch('bizventure-order-history-updated', updated);
     return updated;
   } catch (err) {
     console.error('Failed removing completed order', err);
@@ -120,7 +130,7 @@ export function removeCompletedOrder(orderId: string): PreOrder[] {
 export function clearCompletedOrderHistory(): void {
   try {
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify([]));
-    window.dispatchEvent(new CustomEvent('bizventure-order-history-updated', { detail: [] }));
+    safeDispatch('bizventure-order-history-updated', []);
   } catch (err) {
     console.error('Failed clearing order history', err);
   }
@@ -129,7 +139,7 @@ export function clearCompletedOrderHistory(): void {
 export function resetDemoCompletedHistory(): PreOrder[] {
   try {
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(SAMPLE_COMPLETED_ORDERS));
-    window.dispatchEvent(new CustomEvent('bizventure-order-history-updated', { detail: SAMPLE_COMPLETED_ORDERS }));
+    safeDispatch('bizventure-order-history-updated', SAMPLE_COMPLETED_ORDERS);
     return SAMPLE_COMPLETED_ORDERS;
   } catch (err) {
     console.error('Failed resetting order history', err);
@@ -174,12 +184,17 @@ export function saveNewPreOrder(data: {
   const updated = [newOrder, ...existing];
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: updated }),
+    }).catch(() => {});
   } catch (err) {
     console.error('Failed to save order to localStorage', err);
   }
 
   // Dispatch custom storage event for live UI reactivity
-  window.dispatchEvent(new CustomEvent('bizventure-order-created', { detail: newOrder }));
+  safeDispatch('bizventure-order-created', newOrder);
 
   return newOrder;
 }
@@ -237,7 +252,7 @@ export function resetDemoOrders(): PreOrder[] {
   ];
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_ORDERS));
-  window.dispatchEvent(new CustomEvent('bizventure-order-created', { detail: DEFAULT_ORDERS }));
+  safeDispatch('bizventure-order-created', DEFAULT_ORDERS);
   return DEFAULT_ORDERS;
 }
 

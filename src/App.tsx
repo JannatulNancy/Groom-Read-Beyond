@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Book, PreOrder, SiteContent } from './types';
 import { BOOKS_DATA } from './data/books';
 import { getStoredBooks, getStoredSiteContent } from './services/db';
+import { isAuthenticated, logoutAdmin } from './services/auth';
+import { initLiveSync } from './services/sync';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { StoreConcept } from './components/StoreConcept';
@@ -16,16 +18,43 @@ import { BookDetailsModal } from './components/BookDetailsModal';
 import { PreOrderModal } from './components/PreOrderModal';
 import { OrdersDrawer } from './components/OrdersDrawer';
 import { AdminPanel } from './components/AdminPanel';
-import { Settings, ShieldCheck } from 'lucide-react';
+import { AdminLogin } from './components/AdminLogin';
+import { Phone, Sparkles } from 'lucide-react';
+
+function checkIsAdminRoute(): boolean {
+  if (typeof window === 'undefined') return false;
+  const path = window.location.pathname.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+  const search = window.location.search.toLowerCase();
+  return (
+    path === '/admin' ||
+    path.startsWith('/admin/') ||
+    path.endsWith('/admin') ||
+    path.includes('/admin') ||
+    hash === '#admin' ||
+    hash === '#/admin' ||
+    hash.startsWith('#admin') ||
+    hash.startsWith('#/admin') ||
+    search.includes('page=admin') ||
+    search.includes('admin=true') ||
+    search.includes('view=admin')
+  );
+}
 
 export default function App() {
-  const [viewMode, setViewMode] = useState<'store' | 'admin'>('store');
+  const [isAdminRoute, setIsAdminRoute] = useState<boolean>(() => checkIsAdminRoute());
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => isAuthenticated());
   const [content, setContent] = useState<SiteContent>(getStoredSiteContent());
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [isPreOrderOpen, setIsPreOrderOpen] = useState(false);
   const [preOrderTargetBook, setPreOrderTargetBook] = useState<Book | null>(null);
   const [isOrdersDrawerOpen, setIsOrdersDrawerOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
+
+  // Initialize real-time multi-client live sync
+  useEffect(() => {
+    initLiveSync();
+  }, []);
 
   // Keep site content synced with DB / localStorage events
   useEffect(() => {
@@ -34,21 +63,27 @@ export default function App() {
     return () => window.removeEventListener('bizventure-content-updated', handleContentUpdate);
   }, []);
 
-  // Listen to hash changes e.g. #admin to toggle admin view directly
+  // Listen to browser navigation changes e.g. /admin, #admin, back/forward buttons
   useEffect(() => {
-    const handleHash = () => {
-      if (window.location.hash === '#admin') {
-        setViewMode('admin');
-      }
+    const handleLocationChange = () => {
+      setIsAdminRoute(checkIsAdminRoute());
+      setIsAdminLoggedIn(isAuthenticated());
     };
-    handleHash();
-    window.addEventListener('hashchange', handleHash);
-    return () => window.removeEventListener('hashchange', handleHash);
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    window.addEventListener('bizventure-auth-changed', handleLocationChange);
+
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+      window.removeEventListener('bizventure-auth-changed', handleLocationChange);
+    };
   }, []);
 
   // Track active scroll section for navbar indicator
   useEffect(() => {
-    if (viewMode !== 'store') return;
+    if (isAdminRoute) return;
 
     const handleScroll = () => {
       const sections = ['hero', 'books', 'concept', 'how-it-works', 'business-model', 'stall-products', 'about'];
@@ -69,11 +104,11 @@ export default function App() {
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [viewMode]);
+  }, [isAdminRoute]);
 
   const scrollToSection = (id: string) => {
-    if (viewMode !== 'store') {
-      setViewMode('store');
+    if (isAdminRoute) {
+      handleSwitchToStore();
       setTimeout(() => {
         const element = document.getElementById(id);
         if (element) element.scrollIntoView({ behavior: 'smooth' });
@@ -92,46 +127,88 @@ export default function App() {
     setIsPreOrderOpen(true);
   };
 
-  // If in Admin Mode, render the complete Admin Panel
-  if (viewMode === 'admin') {
+  const handleSwitchToStore = () => {
+    try {
+      if (window.location.pathname.startsWith('/admin')) {
+        window.history.pushState({}, '', '/');
+      } else if (window.location.hash === '#admin') {
+        window.history.pushState({}, '', window.location.pathname);
+      }
+    } catch (e) {
+      console.warn('Could not pushState', e);
+    }
+    setIsAdminRoute(false);
+  };
+
+  const handleAdminLogout = () => {
+    logoutAdmin();
+    setIsAdminLoggedIn(false);
+    handleSwitchToStore();
+  };
+
+  // ---------------------------------------------------------------------------
+  // Admin Route Handling (/admin or #admin) with Authentication Gate
+  // ---------------------------------------------------------------------------
+  if (isAdminRoute) {
+    if (!isAdminLoggedIn) {
+      return (
+        <AdminLogin
+          onSuccess={() => {
+            setIsAdminLoggedIn(true);
+          }}
+          onBackToStore={handleSwitchToStore}
+        />
+      );
+    }
+
     return (
       <AdminPanel
-        onSwitchToStore={() => {
-          setViewMode('store');
-          window.location.hash = '';
-        }}
+        onSwitchToStore={handleSwitchToStore}
+        onLogout={handleAdminLogout}
       />
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Public Customer Storefront (Landing Page)
+  // ---------------------------------------------------------------------------
   return (
     <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-slate-800 antialiased font-sans">
       
-      {/* Top Admin Quick Bar for Stall Team with Doraemon Festive Theme */}
+      {/* Festive Customer Announcement Bar */}
       <div className="bg-gradient-to-r from-sky-600 via-sky-500 to-rose-500 text-white text-[11px] py-1.5 px-4 shadow-xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-amber-300 animate-pulse" />
-            <span className="font-bold">BizVenture 2026 Live Mode</span>
+            <span className="font-bold">BizVenture 2026</span>
             <span className="text-sky-200">·</span>
-            <span className="text-white/90 font-medium">Stall #07 • Where grooming meets wisdom...</span>
+            <span className="text-white/95 font-medium">Stall #09 (ISU Library Lawn) • {content.store.storeTagline || 'Where grooming meets wisdom...'}</span>
           </div>
 
-          <button
-            onClick={() => setViewMode('admin')}
-            className="flex items-center gap-1.5 text-amber-200 hover:text-white font-bold transition-colors cursor-pointer bg-white/10 hover:bg-white/20 px-2 py-0.5 rounded-md"
-          >
-            <Settings className="w-3.5 h-3.5" />
-            <span>Admin Page (Edit Books, Footer & CMS)</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="hidden md:inline-flex items-center gap-1.5 text-amber-200 text-[11px] font-semibold">
+              <Sparkles className="w-3 h-3 text-amber-300" />
+              <span>Campus Stall + Digital Pre-Order Hybrid</span>
+            </span>
+
+            {(content.footer?.contactPhone || content.store.stallContactPhone) && (
+              <a
+                href={`tel:${(content.footer?.contactPhone || content.store.stallContactPhone).replace(/[^0-9+]/g, '')}`}
+                className="inline-flex items-center gap-1 font-bold text-white bg-white/15 hover:bg-white/25 px-2.5 py-0.5 rounded-md transition-colors"
+                title="Call Stall #09 Hotline"
+              >
+                <Phone className="w-3 h-3 text-amber-300" />
+                <span className="font-mono">{content.footer?.contactPhone || content.store.stallContactPhone}</span>
+              </a>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Sticky Universal Top Navigation */}
+      {/* Sticky Universal Top Navigation (Clean Store Navigation) */}
       <Navbar
         onOpenOrders={() => setIsOrdersDrawerOpen(true)}
         onBrowseBooks={() => scrollToSection('books')}
-        onOpenAdmin={() => setViewMode('admin')}
         activeSection={activeSection}
       />
 
@@ -194,7 +271,6 @@ export default function App() {
         <Footer
           onBrowseBooks={() => scrollToSection('books')}
           onOpenOrders={() => setIsOrdersDrawerOpen(true)}
-          onOpenAdmin={() => setViewMode('admin')}
         />
       )}
 

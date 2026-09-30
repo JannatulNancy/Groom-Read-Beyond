@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Book } from '../types';
 import { STORE_CONFIG } from '../config/storeConfig';
 import { CheckCircle2, Clock, Sparkles } from 'lucide-react';
+import { normalizeImageUrl } from '../utils/imageUrl';
 
 interface BookCardProps {
   book: Book;
@@ -15,6 +16,8 @@ export const BookCard: React.FC<BookCardProps> = ({
   onQuickPreOrder,
 }) => {
   const isAvailable = book.status === 'available';
+  const [imageError, setImageError] = useState(false);
+  const normalizedCover = normalizeImageUrl(book.coverImage);
 
   return (
     <div
@@ -32,15 +35,16 @@ export const BookCard: React.FC<BookCardProps> = ({
           <div className="absolute left-0 top-0 bottom-0 w-3 bg-black/25 border-r border-white/10 z-10" />
 
           {/* If custom cover image is uploaded or set */}
-          {book.coverImage ? (
+          {normalizedCover && !imageError ? (
             <div className="absolute inset-0 z-0">
               <img
-                src={book.coverImage}
+                src={normalizedCover}
                 alt={book.title}
                 referrerPolicy="no-referrer"
+                onError={() => setImageError(true)}
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/30" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
             </div>
           ) : null}
 
@@ -51,14 +55,18 @@ export const BookCard: React.FC<BookCardProps> = ({
             </span>
           </div>
 
-          {/* Title & Author on Cover */}
+          {/* Title & Author on Cover (if no cover image or as small label) */}
           <div className="pl-2 space-y-1 my-auto relative z-10">
-            <h4 className="font-display font-bold text-sm sm:text-base leading-tight text-white drop-shadow-md line-clamp-3">
-              {book.title}
-            </h4>
-            <p className="text-[11px] text-white/90 line-clamp-1 font-medium drop-shadow-xs">
-              {book.author}
-            </p>
+            {(!normalizedCover || imageError) && (
+              <>
+                <h4 className="font-display font-bold text-sm sm:text-base leading-tight text-white drop-shadow-md line-clamp-3">
+                  {book.title}
+                </h4>
+                <p className="text-[11px] text-white/90 line-clamp-1 font-medium drop-shadow-xs">
+                  {book.author}
+                </p>
+              </>
+            )}
           </div>
 
           {/* Bottom ornament */}
