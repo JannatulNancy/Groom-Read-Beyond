@@ -71,3 +71,56 @@ export async function compressImageFile(
     reader.readAsDataURL(file);
   });
 }
+
+/**
+ * Generates an instant, ultra-low-resolution micro placeholder (~48x36, <2KB)
+ * in <10ms to show immediate visual feedback without blocking the UI thread.
+ */
+export async function generateLowResPlaceholder(
+  file: File,
+  maxWidth = 48,
+  maxHeight = 36,
+  quality = 0.25
+): Promise<string> {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith('image/')) {
+      return resolve('');
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => resolve('');
+    reader.onload = (e) => {
+      const rawResult = e.target?.result as string;
+      const img = new Image();
+      img.onerror = () => resolve('');
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, width);
+        canvas.height = Math.max(1, height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(rawResult);
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'low';
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = rawResult;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+

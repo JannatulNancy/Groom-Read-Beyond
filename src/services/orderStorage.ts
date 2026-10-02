@@ -1,8 +1,14 @@
 import { PreOrder } from '../types';
-import { getStoredOrders as getDBOrders } from './db';
+import {
+  getStoredOrders as getDBOrders,
+  safeDispatchEvent,
+  STORAGE_KEY_ORDERS,
+  STORAGE_KEY_ORDERS_ALT,
+  STORAGE_KEY_ORDER_HISTORY,
+} from './db';
 
-const STORAGE_KEY = 'bizventure_2026_orders';
-const STORAGE_KEY_HISTORY = 'bizventure_completed_order_history';
+const STORAGE_KEY = STORAGE_KEY_ORDERS;
+const STORAGE_KEY_HISTORY = STORAGE_KEY_ORDER_HISTORY;
 
 export const SAMPLE_COMPLETED_ORDERS: PreOrder[] = [
   {
@@ -84,16 +90,6 @@ export function getStoredCompletedOrders(): PreOrder[] {
   }
 }
 
-function safeDispatch(eventName: string, detail?: unknown) {
-  setTimeout(() => {
-    try {
-      window.dispatchEvent(new CustomEvent(eventName, { detail }));
-    } catch (e) {
-      console.warn(`Failed dispatching ${eventName}`, e);
-    }
-  }, 0);
-}
-
 export function saveCompletedOrder(order: PreOrder): PreOrder[] {
   try {
     const existing = getStoredCompletedOrders();
@@ -106,7 +102,7 @@ export function saveCompletedOrder(order: PreOrder): PreOrder[] {
     const filtered = existing.filter((o) => o.id !== order.id);
     const updated = [completedOrder, ...filtered];
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(updated));
-    safeDispatch('bizventure-order-history-updated', updated);
+    safeDispatchEvent('bizventure-order-history-updated', updated);
     return updated;
   } catch (err) {
     console.error('Failed saving completed order', err);
@@ -119,7 +115,7 @@ export function removeCompletedOrder(orderId: string): PreOrder[] {
     const existing = getStoredCompletedOrders();
     const updated = existing.filter((o) => o.id !== orderId);
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(updated));
-    safeDispatch('bizventure-order-history-updated', updated);
+    safeDispatchEvent('bizventure-order-history-updated', updated);
     return updated;
   } catch (err) {
     console.error('Failed removing completed order', err);
@@ -130,7 +126,7 @@ export function removeCompletedOrder(orderId: string): PreOrder[] {
 export function clearCompletedOrderHistory(): void {
   try {
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify([]));
-    safeDispatch('bizventure-order-history-updated', []);
+    safeDispatchEvent('bizventure-order-history-updated', []);
   } catch (err) {
     console.error('Failed clearing order history', err);
   }
@@ -139,7 +135,7 @@ export function clearCompletedOrderHistory(): void {
 export function resetDemoCompletedHistory(): PreOrder[] {
   try {
     localStorage.setItem(STORAGE_KEY_HISTORY, JSON.stringify(SAMPLE_COMPLETED_ORDERS));
-    safeDispatch('bizventure-order-history-updated', SAMPLE_COMPLETED_ORDERS);
+    safeDispatchEvent('bizventure-order-history-updated', SAMPLE_COMPLETED_ORDERS);
     return SAMPLE_COMPLETED_ORDERS;
   } catch (err) {
     console.error('Failed resetting order history', err);
@@ -184,6 +180,7 @@ export function saveNewPreOrder(data: {
   const updated = [newOrder, ...existing];
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEY_ORDERS_ALT, JSON.stringify(updated));
     fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -193,8 +190,8 @@ export function saveNewPreOrder(data: {
     console.error('Failed to save order to localStorage', err);
   }
 
-  // Dispatch custom storage event for live UI reactivity
-  safeDispatch('bizventure-order-created', newOrder);
+  // Dispatch atomic storage sync event for live multi-tab UI reactivity
+  safeDispatchEvent('bizventure-order-created', updated);
 
   return newOrder;
 }
@@ -252,7 +249,8 @@ export function resetDemoOrders(): PreOrder[] {
   ];
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_ORDERS));
-  safeDispatch('bizventure-order-created', DEFAULT_ORDERS);
+  localStorage.setItem(STORAGE_KEY_ORDERS_ALT, JSON.stringify(DEFAULT_ORDERS));
+  safeDispatchEvent('bizventure-order-created', DEFAULT_ORDERS);
   return DEFAULT_ORDERS;
 }
 

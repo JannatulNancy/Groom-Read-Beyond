@@ -1,6 +1,73 @@
 <!doctype html>
 <html lang="en" class="scroll-smooth">
   <head>
+    <script>
+      (function() {
+        // 1. Intercept console.error to filter benign Vite HMR websocket connection drop messages in preview
+        var origConsoleError = console.error;
+        console.error = function() {
+          var args = Array.prototype.slice.call(arguments);
+          var text = args.map(function(arg) {
+            return String(arg && arg.message ? arg.message : arg);
+          }).join(' ');
+          if (
+            text.indexOf('failed to connect to websocket') !== -1 ||
+            text.indexOf('WebSocket closed without opened') !== -1 ||
+            text.indexOf('vite-hmr') !== -1
+          ) {
+            return; // Suppress harmless preview iframe websocket failure
+          }
+          return origConsoleError.apply(console, args);
+        };
+
+        // 2. Intercept unhandledrejection for WebSocket closures in preview iframe
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event && event.reason;
+          var msg = String(reason && reason.message ? reason.message : reason || '');
+          if (
+            msg.indexOf('WebSocket') !== -1 ||
+            msg.indexOf('websocket') !== -1 ||
+            msg.indexOf('ws://') !== -1 ||
+            msg.indexOf('wss://') !== -1
+          ) {
+            event.preventDefault();
+            if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+          }
+        }, true);
+
+        // 3. Intercept window error events for WebSocket
+        window.addEventListener('error', function(event) {
+          var msg = String(event && event.message ? event.message : '');
+          if (msg.indexOf('WebSocket') !== -1 || msg.indexOf('websocket') !== -1) {
+            event.preventDefault();
+            if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+          }
+        }, true);
+
+        // 4. Safely shim WebSocket when subprotocol is 'vite-hmr' to prevent connection attempts
+        try {
+          var RealWS = window.WebSocket;
+          if (RealWS) {
+            window.WebSocket = function(url, protocol) {
+              if (protocol === 'vite-hmr' || (typeof url === 'string' && url.indexOf('vite') !== -1)) {
+                var dummy = new EventTarget();
+                dummy.readyState = 3; // CLOSED
+                dummy.binaryType = 'blob';
+                dummy.bufferedAmount = 0;
+                dummy.extensions = '';
+                dummy.protocol = 'vite-hmr';
+                dummy.url = String(url);
+                dummy.send = function() {};
+                dummy.close = function() {};
+                return dummy;
+              }
+              return new (Function.prototype.bind.apply(RealWS, [null].concat(Array.prototype.slice.call(arguments))))();
+            };
+            window.WebSocket.prototype = RealWS.prototype;
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Groom, Read & Beyond - Where grooming meets wisdom</title>
@@ -19,4 +86,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

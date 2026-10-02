@@ -20,9 +20,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [scrolled, setScrolled] = useState(false);
   const [content, setContent] = useState<SiteContent>(getStoredSiteContent());
 
-  const updateData = () => {
+  const updateData = (e?: Event) => {
+    const detail = (e as CustomEvent)?.detail;
+    if (detail && typeof detail === 'object' && 'store' in detail) {
+      setContent(detail as SiteContent);
+    } else {
+      setContent(getStoredSiteContent());
+    }
     setOrderCount(getStoredOrders().length);
-    setContent(getStoredSiteContent());
   };
 
   useEffect(() => {

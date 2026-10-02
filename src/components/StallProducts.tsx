@@ -8,7 +8,10 @@ export const StallProducts: React.FC = () => {
   const [content, setContent] = useState<SiteContent>(getStoredSiteContent());
 
   useEffect(() => {
-    const handleUpdate = () => setContent(getStoredSiteContent());
+    const handleUpdate = (e?: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      setContent(detail || getStoredSiteContent());
+    };
     window.addEventListener('bizventure-content-updated', handleUpdate);
     return () => window.removeEventListener('bizventure-content-updated', handleUpdate);
   }, []);

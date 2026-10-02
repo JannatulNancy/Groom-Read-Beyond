@@ -17,7 +17,7 @@ import {
   importDatabaseBackup,
 } from '../services/db';
 import { saveNewPreOrder } from '../services/orderStorage';
-import { compressImageFile } from '../utils/imageCompressor';
+import { compressImageFile, generateLowResPlaceholder } from '../utils/imageCompressor';
 import { normalizeImageUrl } from '../utils/imageUrl';
 import {
   LayoutDashboard,
@@ -57,6 +57,47 @@ import {
   LogOut,
   ShieldCheck
 } from 'lucide-react';
+
+/**
+ * Progressive Image Loader for AdminPanel
+ * Displays a low-res blurred placeholder with processing indicator while full base64
+ * is compressed and stored, preventing UI freezes during image-heavy uploads.
+ */
+export const ProgressiveAdminImage: React.FC<{
+  src: string | undefined | null;
+  alt: string;
+  className?: string;
+  isProcessing?: boolean;
+}> = ({ src, alt, className = 'w-full h-full object-cover', isProcessing = false }) => {
+  return (
+    <div className="relative w-full h-full overflow-hidden bg-slate-100 flex items-center justify-center">
+      {src ? (
+        <img
+          src={normalizeImageUrl(src)}
+          alt={alt}
+          referrerPolicy="no-referrer"
+          className={`${className} transition-all duration-300 ${
+            isProcessing ? 'blur-[3px] scale-105 opacity-80' : 'blur-0 scale-100 opacity-100'
+          }`}
+        />
+      ) : (
+        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 text-[11px] p-2 text-center">
+          <ImageIcon className="w-6 h-6 mb-1 text-slate-300" />
+          <span>No photo</span>
+        </div>
+      )}
+
+      {isProcessing && (
+        <div className="absolute inset-0 bg-sky-950/50 backdrop-blur-[2px] flex flex-col items-center justify-center text-white p-2 z-10 animate-fade-in">
+          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mb-1.5" />
+          <span className="text-[10px] font-bold tracking-wider uppercase bg-sky-900/90 text-sky-100 px-2 py-0.5 rounded shadow-xs">
+            Optimizing High-Res...
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface AdminPanelProps {
   onSwitchToStore: () => void;
@@ -306,17 +347,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
     showToast(`Removed "${title}" from catalogue.`);
   };
 
+  // Progressive Image Processing Tracker
+  const [activeProcessingImages, setActiveProcessingImages] = useState<Record<string, boolean>>({});
+
   const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && editingBook) {
       try {
-        showToast('Compressing book cover...');
-        const result = await compressImageFile(file, 800, 1100, 0.82);
-        setEditingBook((prev) => (prev ? { ...prev, coverImage: result.dataUrl } : prev));
-        showToast(`Book cover optimized (${result.compressedSizeKb} KB)!`);
+        const placeholder = await generateLowResPlaceholder(file, 48, 66, 0.25);
+        if (placeholder) {
+          setEditingBook((prev) => (prev ? { ...prev, coverImage: placeholder } : prev));
+          setActiveProcessingImages((prev) => ({ ...prev, bookCoverModal: true }));
+          showToast('⚡ Instant preview ready! Processing high-res persistent copy...');
+        }
+        setTimeout(async () => {
+          try {
+            const result = await compressImageFile(file, 800, 1100, 0.82);
+            setEditingBook((prev) => (prev ? { ...prev, coverImage: result.dataUrl } : prev));
+            setActiveProcessingImages((prev) => {
+              const next = { ...prev };
+              delete next.bookCoverModal;
+              return next;
+            });
+            showToast(`✓ Book cover optimized (${result.compressedSizeKb} KB)!`);
+          } catch (err) {
+            console.error('Book image error', err);
+            setActiveProcessingImages((prev) => {
+              const next = { ...prev };
+              delete next.bookCoverModal;
+              return next;
+            });
+            showToast('Could not process book photo. Please try a standard JPEG or PNG.');
+          }
+        }, 30);
       } catch (err) {
-        console.error('Book image error', err);
-        showToast('Could not process book photo. Please try a standard JPEG or PNG.');
+        console.error('Book progressive error', err);
       }
     }
   };
@@ -341,42 +406,60 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
 
   const handleUploadImageFile = async (
     e: React.ChangeEvent<HTMLInputElement>,
-    onComplete: (dataUrl: string) => void
+    onComplete: (dataUrl: string) => void,
+    imageKey?: string
   ) => {
     const file = e.target.files?.[0];
-    if (file) {
-      try {
-        showToast('Optimizing & compressing photo for live storefront...');
-        const result = await compressImageFile(file, 1280, 960, 0.8);
+    if (!file) return;
 
-        // Upload to server disk so image is permanent and visible on all devices/published site
+    const key = imageKey || `img_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+    try {
+      // 1. Instant low-res micro placeholder (<10ms, <2KB) - shows immediate visual feedback
+      const placeholder = await generateLowResPlaceholder(file, 48, 36, 0.25);
+      if (placeholder) {
+        setActiveProcessingImages((prev) => ({ ...prev, [key]: true }));
+        onComplete(placeholder);
+        showToast('⚡ Instant preview ready! Processing high-res persistent copy in background...');
+      }
+
+      // 2. Yield control to browser rendering loop via setTimeout(30) to prevent UI blocking
+      setTimeout(async () => {
         try {
-          const uploadRes = await fetch('/api/upload-image', {
+          const result = await compressImageFile(file, 1280, 960, 0.82);
+          const persistentBase64 = result.dataUrl;
+
+          // Directly store full high-res Base64 in state & persistent storage
+          onComplete(persistentBase64);
+          setActiveProcessingImages((prev) => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
+          });
+          showToast(`✓ Image optimized & saved permanently to local storage (${result.compressedSizeKb} KB)!`);
+
+          // Background server disk sync
+          fetch('/api/upload-image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              dataUrl: result.dataUrl,
+              dataUrl: persistentBase64,
               filename: file.name.replace(/\.[^/.]+$/, ''),
             }),
+          }).catch(() => {});
+        } catch (err) {
+          console.error('Image upload compression error', err);
+          setActiveProcessingImages((prev) => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
           });
-          if (uploadRes.ok) {
-            const uploadJson = await uploadRes.json();
-            if (uploadJson.success && uploadJson.url) {
-              onComplete(uploadJson.url);
-              showToast(`Image uploaded & saved as public server file (${uploadJson.sizeKb} KB)! Saved live.`);
-              return;
-            }
-          }
-        } catch {
-          // Fall back to compressed base64 data URI if server upload is unreachable
+          showToast('Failed to optimize high-res image. Kept preview copy.');
         }
-
-        onComplete(result.dataUrl);
-        showToast(`Image uploaded & optimized (${result.compressedSizeKb} KB)! Saved live.`);
-      } catch (err) {
-        console.error('Image upload compression error', err);
-        showToast('Failed to process image. Please try another image file.');
-      }
+      }, 30);
+    } catch (err) {
+      console.error('Progressive upload error', err);
+      showToast('Failed to process image. Please try another image file.');
     }
   };
 
@@ -512,7 +595,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
           image: dataUrl,
         },
       }));
-    });
+    }, 'heroCardImage');
   };
 
   // --------------------------------------------------------------------------
@@ -1880,7 +1963,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
                         >
                           <option value="Pending Verification">🟡 Pending Verification</option>
                           <option value="Confirmed">🔵 Confirmed with Customer</option>
-                          <option value="Ready for Pickup">🟢 Ready at Stall #07</option>
+                          <option value="Ready for Pickup">🟢 Ready at Stall #09</option>
                           <option value="Fulfilled">⚪ Picked Up / Fulfilled</option>
                           <option value="Cancelled">🔴 Cancelled</option>
                         </select>
@@ -2288,10 +2371,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
                       {/* Thumbnail preview */}
                       <div className="aspect-[16/10] rounded-lg overflow-hidden bg-slate-100 border border-slate-200 relative group">
                         {item.currentImage ? (
-                          <img
+                          <ProgressiveAdminImage
                             src={item.currentImage}
                             alt={item.label}
-                            referrerPolicy="no-referrer"
+                            isProcessing={Boolean(activeProcessingImages[item.id])}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                           />
                         ) : (
@@ -2304,7 +2387,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
                           <button
                             type="button"
                             onClick={() => item.onUpdate('')}
-                            className="absolute top-1.5 right-1.5 p-1 bg-slate-900/70 hover:bg-rose-600 text-white rounded-md text-[10px] transition-colors"
+                            className="absolute top-1.5 right-1.5 p-1 bg-slate-900/70 hover:bg-rose-600 text-white rounded-md text-[10px] transition-colors z-20"
                             title="Remove image"
                           >
                             <X className="w-3 h-3" />
@@ -2330,7 +2413,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => handleUploadImageFile(e, (dataUrl) => item.onUpdate(dataUrl))}
+                          onChange={(e) => handleUploadImageFile(e, (dataUrl) => item.onUpdate(dataUrl), item.id)}
                           className="hidden"
                         />
                       </label>
@@ -2382,10 +2465,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                   {/* Photo Preview */}
                   <div className="w-28 h-20 rounded-xl overflow-hidden bg-slate-200 border-2 border-white shadow-xs shrink-0 relative group">
-                    <img
+                    <ProgressiveAdminImage
                       src={content.heroCard?.image || content.store.bannerImage}
                       alt="Hero Display"
-                      referrerPolicy="no-referrer"
+                      isProcessing={Boolean(activeProcessingImages['heroCardImage'])}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -3472,10 +3555,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
 
                 <div className="flex items-center gap-3">
                   <div className="w-24 h-16 rounded-xl overflow-hidden bg-slate-200 border border-slate-300 shrink-0">
-                    <img
-                      src={normalizeImageUrl(content.about.teamPhoto) || '/images/hero_bizventure_stall_1790615311084.jpg'}
+                    <ProgressiveAdminImage
+                      src={content.about.teamPhoto || '/images/hero_bizventure_stall_1790615311084.jpg'}
                       alt="Team preview"
-                      referrerPolicy="no-referrer"
+                      isProcessing={Boolean(activeProcessingImages['aboutTeamPhoto'])}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -3497,7 +3580,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
                         accept="image/*"
                         onChange={(e) => handleUploadImageFile(e, (dataUrl) => {
                           setContent({ ...content, about: { ...content.about, teamPhoto: dataUrl } });
-                        })}
+                        }, 'aboutTeamPhoto')}
                         className="hidden"
                       />
                     </label>
@@ -4424,10 +4507,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onSwitchToStore, onLogou
                   {/* Preview */}
                   <div className="w-12 h-16 rounded bg-slate-200 overflow-hidden shrink-0 border flex items-center justify-center">
                     {editingBook.coverImage ? (
-                      <img
-                        src={normalizeImageUrl(editingBook.coverImage)}
+                      <ProgressiveAdminImage
+                        src={editingBook.coverImage}
                         alt="Preview"
-                        referrerPolicy="no-referrer"
+                        isProcessing={Boolean(activeProcessingImages['bookCoverModal'])}
                         className="w-full h-full object-cover"
                       />
                     ) : (

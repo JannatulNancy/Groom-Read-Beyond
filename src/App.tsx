@@ -58,7 +58,10 @@ export default function App() {
 
   // Keep site content synced with DB / localStorage events
   useEffect(() => {
-    const handleContentUpdate = () => setContent(getStoredSiteContent());
+    const handleContentUpdate = (e?: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      setContent(detail || getStoredSiteContent());
+    };
     window.addEventListener('bizventure-content-updated', handleContentUpdate);
     return () => window.removeEventListener('bizventure-content-updated', handleContentUpdate);
   }, []);

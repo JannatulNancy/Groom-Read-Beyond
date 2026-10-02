@@ -238,10 +238,13 @@ app.post('/api/upload-image', (req: Request, res: Response) => {
 // -------------------------------------------------------------
 async function setupServer() {
   if (!isProduction) {
-    // Development mode: Vite middleware
+    // Development mode: Vite middleware with HMR disabled to prevent WebSocket connection failures in iframe
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

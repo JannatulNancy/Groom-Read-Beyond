@@ -2,11 +2,16 @@ import { Book, PreOrder, SiteContent, OrderStatus } from '../types';
 import { BOOKS_DATA } from '../data/books';
 import { STORE_CONFIG } from '../config/storeConfig';
 import { STALL_PRODUCTS } from '../data/stallProducts';
+import { notifyLocalBroadcast } from './sync';
 
-const STORAGE_KEY_CONTENT = 'groom_read_beyond_content';
-const STORAGE_KEY_BOOKS = 'groom_read_beyond_books';
-const STORAGE_KEY_BOOKS_VERSION = 'groom_read_beyond_books_version_stall9_v1';
-const STORAGE_KEY_ORDERS = 'bizventure_2026_orders';
+export const STORAGE_KEY_CONTENT = 'groom_read_beyond_content';
+export const STORAGE_KEY_CONTENT_ALT = 'bizventure_site_content';
+export const STORAGE_KEY_BOOKS = 'groom_read_beyond_books';
+export const STORAGE_KEY_BOOKS_ALT = 'bizventure_books_catalog';
+export const STORAGE_KEY_BOOKS_VERSION = 'groom_read_beyond_books_version_stall9_v1';
+export const STORAGE_KEY_ORDERS = 'bizventure_2026_orders';
+export const STORAGE_KEY_ORDERS_ALT = 'bizventure_preorders';
+export const STORAGE_KEY_ORDER_HISTORY = 'bizventure_completed_order_history';
 
 export const DEFAULT_SITE_CONTENT: SiteContent = {
   visibility: {
@@ -206,19 +211,128 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
 };
 
 // -------------------------------------------------------------
+// Image Blob & Base64 Persistence Helpers
+// -------------------------------------------------------------
+
+/**
+ * Converts a Blob or File directly into a Base64 Data URL string
+ */
+export function blobToBase64(blob: Blob | File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+      } else {
+        reject(new Error('Failed converting blob to base64 string'));
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error('FileReader error'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Converts any image source (Blob, File, fragile blob: URL, or fetchable path)
+ * into a standalone, persistent Base64 Data URL so images are stored directly in localStorage
+ * rather than relying on fragile relative paths or in-memory object URLs.
+ */
+export async function convertImageSourceToBase64(source: string | Blob | File): Promise<string> {
+  if (!source) return '';
+
+  // 1. Direct Blob or File instance
+  if (typeof source !== 'string') {
+    return blobToBase64(source);
+  }
+
+  const trimmed = source.trim();
+
+    // 2. Already a Base64 Data URL
+    if (trimmed.startsWith('data:image/')) {
+      return trimmed;
+    }
+
+    // 3. Fragile blob: URL (temporary in-memory object URL that breaks across tabs/reloads)
+    if (trimmed.startsWith('blob:')) {
+      try {
+        const response = await fetch(trimmed);
+        const blob = await response.blob();
+        return await blobToBase64(blob);
+      } catch (err) {
+        console.warn('Failed converting blob: URL to base64:', err);
+        return trimmed;
+      }
+    }
+
+    // 4. Relative image path (e.g. /uploads/... or /images/...)
+    // Can be fetched and converted to Base64 so it lives permanently inside localStorage
+    if (typeof window !== 'undefined' && (trimmed.startsWith('/uploads/') || trimmed.startsWith('/images/'))) {
+      try {
+        const response = await fetch(trimmed);
+        if (response.ok) {
+          const blob = await response.blob();
+          return await blobToBase64(blob);
+        }
+      } catch (err) {
+        console.debug('Notice: image fetch fallback, retaining path:', err);
+      }
+    }
+
+    return trimmed;
+}
+
+/**
+ * Sanitizes and persists all image properties in SiteContent by converting
+ * any fragile blob: or temporary URLs into self-contained Base64 Data URLs.
+ */
+export async function sanitizeAndPersistSiteImages(content: SiteContent): Promise<SiteContent> {
+  const cloned: SiteContent = JSON.parse(JSON.stringify(content));
+
+  try {
+    if (cloned.store?.bannerImage && cloned.store.bannerImage.startsWith('blob:')) {
+      cloned.store.bannerImage = await convertImageSourceToBase64(cloned.store.bannerImage);
+    }
+    if (cloned.heroCard?.image && cloned.heroCard.image.startsWith('blob:')) {
+      cloned.heroCard.image = await convertImageSourceToBase64(cloned.heroCard.image);
+    }
+    if (cloned.concept?.booksImage && cloned.concept.booksImage.startsWith('blob:')) {
+      cloned.concept.booksImage = await convertImageSourceToBase64(cloned.concept.booksImage);
+    }
+    if (cloned.concept?.banglesImage && cloned.concept.banglesImage.startsWith('blob:')) {
+      cloned.concept.banglesImage = await convertImageSourceToBase64(cloned.concept.banglesImage);
+    }
+    if (cloned.concept?.cakesImage && cloned.concept.cakesImage.startsWith('blob:')) {
+      cloned.concept.cakesImage = await convertImageSourceToBase64(cloned.concept.cakesImage);
+    }
+    if (cloned.stallProducts?.bangles?.image && cloned.stallProducts.bangles.image.startsWith('blob:')) {
+      cloned.stallProducts.bangles.image = await convertImageSourceToBase64(cloned.stallProducts.bangles.image);
+    }
+    if (cloned.stallProducts?.cakes?.image && cloned.stallProducts.cakes.image.startsWith('blob:')) {
+      cloned.stallProducts.cakes.image = await convertImageSourceToBase64(cloned.stallProducts.cakes.image);
+    }
+  } catch (err) {
+    console.warn('Notice: Image sanitization notice:', err);
+  }
+
+  return cloned;
+}
+
+// -------------------------------------------------------------
 // Site Content Database Functions
 // -------------------------------------------------------------
 export function getStoredSiteContent(): SiteContent {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_CONTENT);
+    const raw = localStorage.getItem(STORAGE_KEY_CONTENT) || localStorage.getItem(STORAGE_KEY_CONTENT_ALT);
     if (!raw) {
       localStorage.setItem(STORAGE_KEY_CONTENT, JSON.stringify(DEFAULT_SITE_CONTENT));
+      localStorage.setItem(STORAGE_KEY_CONTENT_ALT, JSON.stringify(DEFAULT_SITE_CONTENT));
       // Asynchronously fetch latest from server in background
       fetch('/api/content')
         .then((res) => res.json())
         .then((data) => {
           if (data.success && data.content) {
             localStorage.setItem(STORAGE_KEY_CONTENT, JSON.stringify(data.content));
+            localStorage.setItem(STORAGE_KEY_CONTENT_ALT, JSON.stringify(data.content));
             safeDispatchEvent('bizventure-content-updated', data.content);
           }
         })
@@ -280,16 +394,75 @@ export function getStoredSiteContent(): SiteContent {
   }
 }
 
-// Helper for asynchronously dispatching browser events so React state updates
-// never collide across component render cycles (avoids "Cannot update a component while rendering a different component")
-function safeDispatchEvent(eventName: string, detail?: unknown): void {
+// -------------------------------------------------------------
+// Forced Storage Synchronization Layer
+// -------------------------------------------------------------
+let isStorageSyncLayerActive = false;
+
+export function initStorageSyncLayer(): void {
+  if (typeof window === 'undefined' || isStorageSyncLayerActive) return;
+  isStorageSyncLayerActive = true;
+
+  window.addEventListener('storage', (event: StorageEvent) => {
+    const key = event.key;
+
+    // When storage changes (or was cleared if key is null), force React state to refresh from persistent storage
+    if (!key || key === STORAGE_KEY_CONTENT || key === STORAGE_KEY_CONTENT_ALT) {
+      const refreshedContent = getStoredSiteContent();
+      safeDispatchEvent('bizventure-content-updated', refreshedContent);
+    }
+
+    if (!key || key === STORAGE_KEY_BOOKS || key === STORAGE_KEY_BOOKS_ALT) {
+      const refreshedBooks = getStoredBooks();
+      safeDispatchEvent('bizventure-books-updated', refreshedBooks);
+    }
+
+    if (!key || key === STORAGE_KEY_ORDERS || key === STORAGE_KEY_ORDERS_ALT) {
+      const refreshedOrders = getStoredOrders();
+      safeDispatchEvent('bizventure-order-created', refreshedOrders);
+    }
+
+    if (!key || key === STORAGE_KEY_ORDER_HISTORY) {
+      safeDispatchEvent('bizventure-order-history-updated');
+    }
+  });
+}
+
+// Automatically activate forced storage synchronization layer on module load
+if (typeof window !== 'undefined') {
+  initStorageSyncLayer();
+}
+
+// Helper for immediately dispatching browser events so React state updates
+// trigger instant re-renders in the current tab AND broadcast live to all other open tabs
+export function safeDispatchEvent(eventName: string, detail?: unknown): void {
+  // 1. Immediate synchronous dispatch in current window for 0ms UI re-render
+  try {
+    window.dispatchEvent(new CustomEvent(eventName, { detail }));
+  } catch (e) {
+    console.warn(`Failed immediate dispatch of ${eventName}`, e);
+  }
+
+  // 2. Also dispatch on next tick (safety net for any components currently finishing render phases)
   setTimeout(() => {
     try {
       window.dispatchEvent(new CustomEvent(eventName, { detail }));
-    } catch (e) {
-      console.warn(`Failed dispatching ${eventName}`, e);
+    } catch {
+      // ignore
     }
   }, 0);
+
+  // 3. Broadcast to all other open browser tabs via BroadcastChannel
+  try {
+    let entity: 'content' | 'books' | 'orders' | 'history' = 'content';
+    if (eventName === 'bizventure-books-updated') entity = 'books';
+    else if (eventName === 'bizventure-order-created') entity = 'orders';
+    else if (eventName === 'bizventure-order-history-updated') entity = 'history';
+
+    notifyLocalBroadcast(entity, detail);
+  } catch (e) {
+    console.debug('Failed notifyLocalBroadcast:', e);
+  }
 }
 
 export function saveSiteContent(content: SiteContent): void {
@@ -317,6 +490,7 @@ export function saveSiteContent(content: SiteContent): void {
 
   try {
     localStorage.setItem(STORAGE_KEY_CONTENT, JSON.stringify(synchronizedContent));
+    localStorage.setItem(STORAGE_KEY_CONTENT_ALT, JSON.stringify(synchronizedContent));
     // Persist to server disk for cross-device & published site persistence
     fetch('/api/content', {
       method: 'POST',
@@ -326,13 +500,29 @@ export function saveSiteContent(content: SiteContent): void {
   } catch (e) {
     console.warn('Storage warning: could not write full site content to localStorage, dispatching memory event anyway', e);
   } finally {
-    // ALWAYS dispatch the event in next tick so React components render cleanly
+    // Immediately dispatch in current window & broadcast to all tabs
     safeDispatchEvent('bizventure-content-updated', synchronizedContent);
   }
+
+  // Asynchronously sanitize and convert any fragile blob: or temporary URLs into persistent Base64
+  sanitizeAndPersistSiteImages(synchronizedContent).then((sanitized) => {
+    const rawPrev = localStorage.getItem(STORAGE_KEY_CONTENT);
+    const rawNext = JSON.stringify(sanitized);
+    if (rawPrev !== rawNext) {
+      try {
+        localStorage.setItem(STORAGE_KEY_CONTENT, rawNext);
+        localStorage.setItem(STORAGE_KEY_CONTENT_ALT, rawNext);
+        safeDispatchEvent('bizventure-content-updated', sanitized);
+      } catch (err) {
+        console.warn('Storage warning on image base64 save:', err);
+      }
+    }
+  }).catch(() => {});
 }
 
 export function resetSiteContent(): SiteContent {
   localStorage.setItem(STORAGE_KEY_CONTENT, JSON.stringify(DEFAULT_SITE_CONTENT));
+  localStorage.setItem(STORAGE_KEY_CONTENT_ALT, JSON.stringify(DEFAULT_SITE_CONTENT));
   fetch('/api/content', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -347,10 +537,11 @@ export function resetSiteContent(): SiteContent {
 // -------------------------------------------------------------
 export function getStoredBooks(): Book[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_BOOKS);
+    const raw = localStorage.getItem(STORAGE_KEY_BOOKS) || localStorage.getItem(STORAGE_KEY_BOOKS_ALT);
     const version = localStorage.getItem(STORAGE_KEY_BOOKS_VERSION);
     if (!raw || version !== 'v3_stall9_real_cover_images') {
       localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(BOOKS_DATA));
+      localStorage.setItem(STORAGE_KEY_BOOKS_ALT, JSON.stringify(BOOKS_DATA));
       localStorage.setItem(STORAGE_KEY_BOOKS_VERSION, 'v3_stall9_real_cover_images');
       // Fetch from server in background
       fetch('/api/books')
@@ -358,6 +549,7 @@ export function getStoredBooks(): Book[] {
         .then((data) => {
           if (data.success && Array.isArray(data.books) && data.books.length > 0) {
             localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(data.books));
+            localStorage.setItem(STORAGE_KEY_BOOKS_ALT, JSON.stringify(data.books));
             safeDispatchEvent('bizventure-books-updated', data.books);
           }
         })
@@ -393,6 +585,7 @@ export function getStoredBooks(): Book[] {
       });
       if (updated) {
         localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(enriched));
+        localStorage.setItem(STORAGE_KEY_BOOKS_ALT, JSON.stringify(enriched));
       }
       return enriched;
     }
@@ -404,6 +597,15 @@ export function getStoredBooks(): Book[] {
 }
 
 export function saveBook(book: Book): Book[] {
+  // If book coverImage is a fragile blob: URL, asynchronously convert to base64 and re-save
+  if (book.coverImage && book.coverImage.startsWith('blob:')) {
+    convertImageSourceToBase64(book.coverImage).then((base64) => {
+      if (base64 && base64.startsWith('data:image/')) {
+        saveBook({ ...book, coverImage: base64 });
+      }
+    }).catch(() => {});
+  }
+
   const books = getStoredBooks();
   const index = books.findIndex((b) => b.id === book.id);
   let updated: Book[];
@@ -417,6 +619,7 @@ export function saveBook(book: Book): Book[] {
 
   try {
     localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEY_BOOKS_ALT, JSON.stringify(updated));
     fetch('/api/books', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -434,6 +637,7 @@ export function deleteBook(bookId: string): Book[] {
   const updated = books.filter((b) => b.id !== bookId);
   try {
     localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEY_BOOKS_ALT, JSON.stringify(updated));
     fetch('/api/books', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -448,6 +652,7 @@ export function deleteBook(bookId: string): Book[] {
 
 export function resetBooks(): Book[] {
   localStorage.setItem(STORAGE_KEY_BOOKS, JSON.stringify(BOOKS_DATA));
+  localStorage.setItem(STORAGE_KEY_BOOKS_ALT, JSON.stringify(BOOKS_DATA));
   localStorage.setItem(STORAGE_KEY_BOOKS_VERSION, 'v3_stall9_real_cover_images');
   fetch('/api/books', {
     method: 'POST',
@@ -514,14 +719,16 @@ const DEFAULT_ORDERS: PreOrder[] = [
 
 export function getStoredOrders(): PreOrder[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_ORDERS);
+    const raw = localStorage.getItem(STORAGE_KEY_ORDERS) || localStorage.getItem(STORAGE_KEY_ORDERS_ALT);
     if (!raw) {
       localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(DEFAULT_ORDERS));
+      localStorage.setItem(STORAGE_KEY_ORDERS_ALT, JSON.stringify(DEFAULT_ORDERS));
       fetch('/api/orders')
         .then((res) => res.json())
         .then((data) => {
           if (data.success && Array.isArray(data.orders)) {
             localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(data.orders));
+            localStorage.setItem(STORAGE_KEY_ORDERS_ALT, JSON.stringify(data.orders));
             safeDispatchEvent('bizventure-order-created', data.orders);
           }
         })
@@ -557,6 +764,7 @@ export function updateOrderStatus(
 
   try {
     localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEY_ORDERS_ALT, JSON.stringify(updated));
     fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -574,6 +782,7 @@ export function deleteOrder(orderId: string): PreOrder[] {
   const updated = orders.filter((o) => o.id !== orderId);
   try {
     localStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEY_ORDERS_ALT, JSON.stringify(updated));
     fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

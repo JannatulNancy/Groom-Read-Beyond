@@ -7,6 +7,7 @@ import {
   resetDemoCompletedHistory,
 } from '../services/orderStorage';
 import { STORE_CONFIG } from '../config/storeConfig';
+import { maskCustomerName, maskPhoneNumber } from '../utils/privacy';
 import {
   CheckCheck,
   Copy,
@@ -25,6 +26,8 @@ import {
   Printer,
   ChevronDown,
   ChevronUp,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 
 interface OrderHistorySectionProps {
@@ -359,11 +362,19 @@ export const OrderHistorySection: React.FC<OrderHistorySectionProps> = ({
                     <div className="grid grid-cols-2 gap-2 text-slate-700">
                       <div>
                         <span className="text-slate-400 block text-[10px]">Recipient:</span>
-                        <span className="font-semibold">{order.customerName}</span>
+                        <span className="font-semibold flex items-center gap-1">
+                          <span>{maskCustomerName(order.customerName)}</span>
+                          <span className="text-[9px] text-emerald-700 bg-emerald-100/80 px-1 rounded font-normal">
+                            Protected
+                          </span>
+                        </span>
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10px]">Contact:</span>
-                        <span className="font-mono">{order.phoneNumber}</span>
+                        <span className="font-mono text-slate-600 flex items-center gap-1">
+                          <span>{maskPhoneNumber(order.phoneNumber)}</span>
+                          <Lock className="w-2.5 h-2.5 text-slate-400" />
+                        </span>
                       </div>
                       <div>
                         <span className="text-slate-400 block text-[10px]">Order Date:</span>
@@ -379,7 +390,7 @@ export const OrderHistorySection: React.FC<OrderHistorySectionProps> = ({
                       <span>Verified by Groom, Read & Beyond crew</span>
                       <button
                         onClick={() => {
-                          const receiptText = `BizVenture 2026 - Stall #09 Receipt\nOrder: ${order.orderNumber}\nBook: ${order.bookTitle} (x${order.quantity})\nTotal Paid: BDT ${total}\nCustomer: ${order.customerName} (${order.phoneNumber})\nCollected: ${new Date(order.updatedAt || order.createdAt).toLocaleString()}\nStatus: Fulfilled & Paid in Cash`;
+                          const receiptText = `BizVenture 2026 - Stall #09 Receipt\nOrder: ${order.orderNumber}\nBook: ${order.bookTitle} (x${order.quantity})\nTotal Paid: BDT ${total}\nCustomer: ${maskCustomerName(order.customerName)} (${maskPhoneNumber(order.phoneNumber)})\nCollected: ${new Date(order.updatedAt || order.createdAt).toLocaleString()}\nStatus: Fulfilled & Paid in Cash`;
                           navigator.clipboard.writeText(receiptText);
                           alert('Receipt text copied to clipboard!');
                         }}

@@ -9,6 +9,7 @@ import {
 import { updateOrderStatus } from '../services/db';
 import { OrderHistorySection } from './OrderHistorySection';
 import { STORE_CONFIG } from '../config/storeConfig';
+import { maskCustomerName, maskPhoneNumber } from '../utils/privacy';
 import {
   X,
   ClipboardList,
@@ -28,6 +29,9 @@ import {
   Calendar,
   History,
   ArrowRight,
+  ShieldCheck,
+  Lock,
+  Search,
 } from 'lucide-react';
 
 interface OrdersDrawerProps {
@@ -147,6 +151,7 @@ export const OrdersDrawer: React.FC<OrdersDrawerProps> = ({
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const refreshOrders = () => {
     setOrders(getStoredOrders());
@@ -176,16 +181,29 @@ export const OrdersDrawer: React.FC<OrdersDrawerProps> = ({
     return orders.filter((o) => o.status !== 'Fulfilled');
   }, [orders]);
 
-  // Filter active orders based on selected status filter
+  // Filter active orders based on selected status filter and search query
   const filteredOrders = useMemo(() => {
-    if (activeFilter === 'All') return activeOrders;
-    return activeOrders.filter((o) => {
-      if (activeFilter === 'Pending') {
-        return o.status === 'Pending Verification' || o.status === ('Pending' as OrderStatus);
-      }
-      return o.status === activeFilter;
-    });
-  }, [activeOrders, activeFilter]);
+    let list = activeOrders;
+    if (activeFilter !== 'All') {
+      list = list.filter((o) => {
+        if (activeFilter === 'Pending') {
+          return o.status === 'Pending Verification' || o.status === ('Pending' as OrderStatus);
+        }
+        return o.status === activeFilter;
+      });
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (o) =>
+          o.orderNumber.toLowerCase().includes(q) ||
+          o.bookTitle.toLowerCase().includes(q)
+      );
+    }
+
+    return list;
+  }, [activeOrders, activeFilter, searchQuery]);
 
   // Status counts for badge pills
   const counts = useMemo(() => {
@@ -326,6 +344,47 @@ export const OrdersDrawer: React.FC<OrdersDrawerProps> = ({
             />
           ) : (
             <>
+
+          {/* Customer Privacy & Data Protection Banner */}
+          <div className="bg-emerald-50/90 border border-emerald-200/90 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-emerald-950 shadow-2xs">
+            <div className="w-7 h-7 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0 mt-0.5 text-emerald-700">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5 flex-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-emerald-900 flex items-center gap-1.5">
+                  <span>Customer Privacy Protected</span>
+                </span>
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  <Lock className="w-2.5 h-2.5" />
+                  <span>Public Safe</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-emerald-800 leading-snug">
+                Customer phone numbers and private details are strictly protected and hidden on this public page. Only authorized Stall #09 administrators can view full customer contact info.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Search for Customer's own Order ID or Book */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by Order ID (e.g. BV-2026-001) or Book title..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-12 py-2 text-xs bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all placeholder:text-slate-400"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-[10px] font-bold cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
           
           {/* ============================================================== */}
           {/* COLOR-CODED STATUS LEGEND                                      */}
@@ -676,22 +735,31 @@ export const OrdersDrawer: React.FC<OrdersDrawerProps> = ({
                     </div>
                   </div>
 
-                  {/* Customer, Contact & Timestamp */}
+                  {/* Customer, Contact & Timestamp (Privacy Protected) */}
                   <div className="pt-1 text-slate-600 space-y-1.5 text-[11px]">
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-slate-400">Customer:</span>
-                      <span className="font-semibold text-slate-800">{order.customerName}</span>
+                      <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                        <span>{maskCustomerName(order.customerName)}</span>
+                        <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full font-medium" title="Name masked on public website for privacy">
+                          <Lock className="w-2.5 h-2.5" />
+                          <span>Protected</span>
+                        </span>
+                      </span>
                     </div>
 
                     <div className="flex justify-between items-center">
                       <span className="text-slate-400">Contact Method:</span>
-                      <span className="font-mono text-slate-800 flex items-center gap-1 font-medium">
+                      <span className="font-mono text-slate-700 flex items-center gap-1.5 font-medium">
                         {order.contactMethod === 'WhatsApp' ? (
                           <MessageCircle className="w-3 h-3 text-emerald-600 inline" />
                         ) : (
                           <Phone className="w-3 h-3 text-sky-600 inline" />
                         )}
-                        {order.phoneNumber}
+                        <span>{maskPhoneNumber(order.phoneNumber)}</span>
+                        <span className="text-[9px] text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-sans" title="Full phone number only accessible by Stall #09 Admin">
+                          Admin Only
+                        </span>
                       </span>
                     </div>
 
@@ -711,8 +779,9 @@ export const OrdersDrawer: React.FC<OrdersDrawerProps> = ({
                     </div>
 
                     {order.notes && (
-                      <div className="pt-1.5 border-t border-slate-100 text-slate-500 italic text-[11px]">
-                        "{order.notes}"
+                      <div className="pt-1.5 border-t border-slate-100 text-slate-500 text-[10px] flex items-center gap-1.5 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <Lock className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="italic">Customer note recorded securely (Visible to Stall #09 Admin only)</span>
                       </div>
                     )}
 

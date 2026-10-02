@@ -19,9 +19,18 @@ export const BookCatalogue: React.FC<BookCatalogueProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
 
-  const updateData = () => {
-    setBooks(getStoredBooks());
-    setContent(getStoredSiteContent());
+  const updateData = (e?: Event) => {
+    const detail = (e as CustomEvent)?.detail;
+    if (detail && Array.isArray(detail)) {
+      setBooks(detail as Book[]);
+    } else {
+      setBooks(getStoredBooks());
+    }
+    if (detail && typeof detail === 'object' && 'bookCatalogue' in detail) {
+      setContent(detail as SiteContent);
+    } else {
+      setContent(getStoredSiteContent());
+    }
   };
 
   useEffect(() => {
